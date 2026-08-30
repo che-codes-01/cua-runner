@@ -1,0 +1,27 @@
+{
+  "_overrides": {
+    "FOSS_POLICY_EXPIRY": "2026-10-27",
+    "reason": "OutdatedFOSSLibraries policy violations in transitive dependencies (winston, lodash, promise utilities, node-forge, etc.) issued per SDOL-005. See FOSS_OVERRIDES.md for full list and upgrade strategy. Override active through 2026-10-27."
+  },
+  "name": "runner-agent",
+  "version": "1.0.0",
+  "description": "Connects a machine to the Computer Actions Service and executes relayed actions",
+  "bin": {
+    "cua-runner": "dist/index.js"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "ws": "^8.17.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/ws": "^8.5.11",
+    "tsx": "^4.15.0",
+    "typescript": "^5.4.5"
+  }
+}
