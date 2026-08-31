@@ -119,6 +119,8 @@ async function executeAction(payload, sessionId) {
         case 'type':
         case 'key':
         case 'scroll':
+        case 'click_text':
+        case 'find_text':
             return (0, cua_1.executeCuaAction)(action, sessionId);
         default: {
             const t = action.type;

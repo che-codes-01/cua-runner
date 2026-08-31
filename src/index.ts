@@ -32,14 +32,7 @@ function connect(): void {
   ws.on('open', () => {
     reconnectDelay = 2_000;    // reset back-off on successful connect
     log.info('✓ Connected');
-
-    // Register this machine with the service
-    send({
-      type:    'register',
-      name:    config.runnerName,
-      labels:  config.labels,
-      version: config.version,
-    });
+    // register is sent after the service confirms auth via the `connected` message
 
     // Send a heartbeat every 30 s so the service knows we're alive
     heartbeatTimer = setInterval(() => {
@@ -76,9 +69,16 @@ async function handleMessage(msg: ServiceMsg): Promise<void> {
 
   switch (msg.type) {
 
-    // ── Service confirms connection ──────────────────────────────────────────
+    // ── Service confirms connection + authentication ─────────────────────────
     case 'connected':
-      log.info(`Authenticated  tenant: ${msg.tenantName}  (${msg.tenantId})`);
+      log.info(`Authenticated  workspaceId: ${msg.workspaceId}`);
+      // Now that auth is confirmed, register this machine
+      send({
+        type:    'register',
+        name:    config.runnerName,
+        labels:  config.labels,
+        version: config.version,
+      });
       break;
 
     // ── Service confirms registration ────────────────────────────────────────

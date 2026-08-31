@@ -6,9 +6,6 @@
   "name": "runner-agent",
   "version": "1.0.0",
   "description": "Connects a machine to the Computer Actions Service and executes relayed actions",
-  "bin": {
-    "cua-runner": "dist/index.js"
-  },
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",

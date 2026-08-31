@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 "use strict";
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
@@ -26,13 +25,7 @@ function connect() {
     ws.on('open', () => {
         reconnectDelay = 2000; // reset back-off on successful connect
         logger_1.log.info('✓ Connected');
-        // Register this machine with the service
-        send({
-            type: 'register',
-            name: config_1.config.runnerName,
-            labels: config_1.config.labels,
-            version: config_1.config.version,
-        });
+        // register is sent after the service confirms auth via the `connected` message
         // Send a heartbeat every 30 s so the service knows we're alive
         heartbeatTimer = setInterval(() => {
             if (ws.readyState === ws_1.default.OPEN) {
@@ -67,9 +60,16 @@ function connect() {
 async function handleMessage(msg) {
     logger_1.log.debug(`← ${msg.type}`);
     switch (msg.type) {
-        // ── Service confirms connection ──────────────────────────────────────────
+        // ── Service confirms connection + authentication ─────────────────────────
         case 'connected':
-            logger_1.log.info(`Authenticated  tenant: ${msg.tenantName}  (${msg.tenantId})`);
+            logger_1.log.info(`Authenticated  workspaceId: ${msg.workspaceId}`);
+            // Now that auth is confirmed, register this machine
+            send({
+                type: 'register',
+                name: config_1.config.runnerName,
+                labels: config_1.config.labels,
+                version: config_1.config.version,
+            });
             break;
         // ── Service confirms registration ────────────────────────────────────────
         case 'registered':

@@ -15,7 +15,6 @@ exports.executeCuaAction = executeCuaAction;
 const child_process_1 = require("child_process");
 const util_1 = require("util");
 const path_1 = __importDefault(require("path"));
-const os_1 = __importDefault(require("os"));
 const logger_1 = require("./logger");
 const execFileAsync = (0, util_1.promisify)(child_process_1.execFile);
 // Resolve the helper script relative to this source file so it works in both
@@ -72,11 +71,9 @@ async function executeCuaAction(action, sessionId) {
     if (result.type === 'error') {
         throw new Error(result.error);
     }
-    // For image results log the on-disk file so the operator can open it
+    // For image results log the on-disk path so the operator can open it
     if (result.type === 'image') {
-        const file = action.type === 'zoom'
-            ? path_1.default.join(os_1.default.tmpdir(), 'cua-zoom.png')
-            : path_1.default.join(os_1.default.tmpdir(), 'cua-screenshot.png');
+        const file = result.path ?? '(path unknown)';
         const kb = Math.round((result.data.length * 3) / 4 / 1024);
         logger_1.log.info(`${action.type} saved → ${file}  (~${kb} KB)`);
     }
