@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 // ─── Runner Agent – main entry point ─────────────────────────────────────────
 //
 // 1. Connects to the Computer Actions Service via WebSocket
