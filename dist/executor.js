@@ -39,13 +39,17 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.executeAction = executeAction;
 // ─── Action Executor ──────────────────────────────────────────────────────────
 //
-// Receives the action payload sent by the user through the service and executes
-// the appropriate work on this machine.
+// Receives the action payload relayed by the service and dispatches it.
+//
+// Enhanced with (findings):
+//   Finding 2: run_task   – high-level LLM-driven computer-use agent loop
+//   Finding 4: mouse_down/up, drag (path), hotkey, open, launch, focus_window
 //
 const child_process_1 = require("child_process");
 const util_1 = require("util");
 const os_1 = __importDefault(require("os"));
 const cua_1 = require("./cua");
+const agent_1 = require("./agent");
 const execAsync = (0, util_1.promisify)(child_process_1.exec);
 // ── Executor ──────────────────────────────────────────────────────────────────
 async function executeAction(payload, sessionId) {
@@ -95,9 +99,6 @@ async function executeAction(payload, sessionId) {
                 return { stdout: stdout.trimEnd(), stderr: stderr.trimEnd(), exitCode: 0 };
             }
             catch (err) {
-                // execAsync throws when the command exits non-zero.  The actual output
-                // lives in err.stdout / err.stderr — return it instead of re-throwing so
-                // the MCP client sees the real command output rather than a 502 error.
                 const e = err;
                 return {
                     stdout: (e.stdout ?? '').trimEnd(),
@@ -106,7 +107,14 @@ async function executeAction(payload, sessionId) {
                 };
             }
         }
-        // ── CUA tools ─────────────────────────────────────────────────────────────
+        // ── Finding 2: run_task – autonomous LLM-driven agent ────────────────────
+        case 'run_task': {
+            const { task, model, maxSteps, systemPrompt } = action;
+            if (!task?.trim())
+                throw new Error('`task` is required for run_task');
+            return (0, agent_1.runTask)(task, sessionId ?? 'default', { model, maxSteps, systemPrompt });
+        }
+        // ── CUA low-level actions (including Finding 4 new types) ─────────────────
         case 'screenshot':
         case 'zoom':
         case 'cursor_position':
@@ -115,12 +123,22 @@ async function executeAction(payload, sessionId) {
         case 'double_click':
         case 'right_click':
         case 'mouse_move':
+        case 'mouse_down': // Finding 4
+        case 'mouse_up': // Finding 4
         case 'left_click_drag':
+        case 'drag': // Finding 4
         case 'type':
         case 'key':
+        case 'hotkey': // Finding 4
         case 'scroll':
         case 'click_text':
         case 'find_text':
+        case 'open': // Finding 4
+        case 'launch': // Finding 4
+        case 'focus_window': // Finding 4
+        case 'assert_text_visible': // Assertion
+        case 'assert_text_not_visible': // Assertion
+        case 'assert_result_contains': // Assertion
             return (0, cua_1.executeCuaAction)(action, sessionId);
         default: {
             const t = action.type;

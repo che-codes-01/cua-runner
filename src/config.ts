@@ -47,4 +47,14 @@ export const config = {
   runnerName:  process.env.RUNNER_NAME || os.hostname(),
   labels:      (process.env.RUNNER_LABELS || '').split(',').filter(Boolean),
   version:     '1.0.0',
+
+  // ── Finding 2: run_task agent ──────────────────────────────────────────────
+  /** Anthropic API key (required only for run_task). */
+  anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? null,
+
+  /** LLM model used for autonomous run_task agent loops. */
+  agentModel:      process.env.CUA_AGENT_MODEL ?? 'claude-3-5-sonnet-20241022',
+
+  /** Maximum LLM steps allowed per run_task call before giving up. */
+  agentMaxSteps:   parseInt(process.env.CUA_AGENT_MAX_STEPS ?? '50', 10),
 };

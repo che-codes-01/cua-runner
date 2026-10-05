@@ -627,6 +627,39 @@ def _backend_cliclick(t: str, action: dict) -> dict:
             raise RuntimeError(f"scroll failed: {exc}") from exc
         return {"type": "text", "text": f"Scrolled {dirn} ×{amt}"}
 
+    # ── Finding 4: separate mouse down / up ──────────────────────────────────
+    if t == "mouse_down":
+        x, y   = _coord(t, action, "coordinate")
+        button = action.get("button", "left")
+        dd     = {"left": "dd", "right": "rd"}.get(button, "dd")
+        _cliclick(f"{dd}:{x},{y}")
+        return {"type": "text", "text": f"Mouse down ({button}) at {x},{y}"}
+
+    if t == "mouse_up":
+        x, y   = _coord(t, action, "coordinate")
+        button = action.get("button", "left")
+        du     = {"left": "du", "right": "ru"}.get(button, "du")
+        _cliclick(f"{du}:{x},{y}")
+        return {"type": "text", "text": f"Mouse up ({button}) at {x},{y}"}
+
+    # ── Finding 4: multi-waypoint drag path ────────────────────────────────
+    if t == "drag":
+        path_pts = action.get("path", [])
+        if len(path_pts) < 2:
+            raise ValueError("drag requires at least 2 waypoints: [[x0,y0],[x1,y1],...]")
+        button = action.get("button", "left")
+        dd     = {"left": "dd", "right": "rd"}.get(button, "dd")
+        du     = {"left": "du", "right": "ru"}.get(button, "du")
+        sx, sy = _to_logical(int(path_pts[0][0]), int(path_pts[0][1]))
+        args: list[str] = [f"{dd}:{sx},{sy}"]
+        for wp in path_pts[1:-1]:
+            wx, wy = _to_logical(int(wp[0]), int(wp[1]))
+            args.append(f"m:{wx},{wy}")
+        ex, ey = _to_logical(int(path_pts[-1][0]), int(path_pts[-1][1]))
+        args += [f"m:{ex},{ey}", f"{du}:{ex},{ey}"]
+        _cliclick(*args)
+        return {"type": "text", "text": f"Dragged {len(path_pts)}-point path ({button} button)"}
+
     raise ValueError(f"Unknown action type for cliclick backend: {t!r}")
 
 
@@ -736,6 +769,41 @@ def _backend_xdotool(t: str, action: dict) -> dict:
         _xdo("click", "--clearmodifiers", "--repeat", str(amt), btn)
         return {"type": "text", "text": f"Scrolled {dirn} ×{amt}"}
 
+    # ── Finding 4: separate mouse down / up ──────────────────────────────────
+    if t == "mouse_down":
+        x, y   = _coord(t, action, "coordinate")
+        button = action.get("button", "left")
+        btn    = {"left": "1", "middle": "2", "right": "3"}.get(button, "1")
+        _xdo("mousemove", str(x), str(y))
+        _xdo("mousedown", btn)
+        return {"type": "text", "text": f"Mouse down ({button}) at {x},{y}"}
+
+    if t == "mouse_up":
+        x, y   = _coord(t, action, "coordinate")
+        button = action.get("button", "left")
+        btn    = {"left": "1", "middle": "2", "right": "3"}.get(button, "1")
+        _xdo("mousemove", str(x), str(y))
+        _xdo("mouseup", btn)
+        return {"type": "text", "text": f"Mouse up ({button}) at {x},{y}"}
+
+    # ── Finding 4: multi-waypoint drag path ────────────────────────────────
+    if t == "drag":
+        path_pts = action.get("path", [])
+        if len(path_pts) < 2:
+            raise ValueError("drag requires at least 2 waypoints")
+        button = action.get("button", "left")
+        btn    = {"left": "1", "middle": "2", "right": "3"}.get(button, "1")
+        sx, sy = _to_logical(int(path_pts[0][0]), int(path_pts[0][1]))
+        _xdo("mousemove", str(sx), str(sy))
+        _xdo("mousedown", btn)
+        time.sleep(0.05)
+        for wp in path_pts[1:]:
+            wx, wy = _to_logical(int(wp[0]), int(wp[1]))
+            _xdo("mousemove", "--sync", str(wx), str(wy))
+            time.sleep(0.02)
+        _xdo("mouseup", btn)
+        return {"type": "text", "text": f"Dragged {len(path_pts)}-point path ({button} button)"}
+
     raise ValueError(f"Unknown action type for xdotool backend: {t!r}")
 
 
@@ -842,6 +910,34 @@ def _backend_pyautogui(t: str, action: dict) -> dict:
         elif dirn == "left":
             pyautogui.hscroll(-amt)
         return {"type": "text", "text": f"Scrolled {dirn} ×{amt}"}
+
+    # ── Finding 4: separate mouse down / up ──────────────────────────────────
+    if t == "mouse_down":
+        x, y   = _coord(t, action, "coordinate")
+        button = action.get("button", "left")
+        pyautogui.mouseDown(x, y, button=button)
+        return {"type": "text", "text": f"Mouse down ({button}) at {x},{y}"}
+
+    if t == "mouse_up":
+        x, y   = _coord(t, action, "coordinate")
+        button = action.get("button", "left")
+        pyautogui.mouseUp(x, y, button=button)
+        return {"type": "text", "text": f"Mouse up ({button}) at {x},{y}"}
+
+    # ── Finding 4: multi-waypoint drag path ────────────────────────────────
+    if t == "drag":
+        path_pts = action.get("path", [])
+        if len(path_pts) < 2:
+            raise ValueError("drag requires at least 2 waypoints")
+        button = action.get("button", "left")
+        sx, sy = _to_logical(int(path_pts[0][0]), int(path_pts[0][1]))
+        pyautogui.moveTo(sx, sy)
+        pyautogui.mouseDown(button=button)
+        for wp in path_pts[1:]:
+            wx, wy = _to_logical(int(wp[0]), int(wp[1]))
+            pyautogui.moveTo(wx, wy, duration=0.05)
+        pyautogui.mouseUp(button=button)
+        return {"type": "text", "text": f"Dragged {len(path_pts)}-point path ({button} button)"}
 
     raise ValueError(f"Unknown action type for pyautogui backend: {t!r}")
 
@@ -1036,7 +1132,97 @@ def _click_text(action: dict) -> dict:
             "text": f"Clicked {best['text']!r} at ({x},{y})  (score {best['score']})"}
 
 
+# ── Finding 4: OS-level helpers (open / launch / focus_window) ───────────────
+
+def _open(action: dict) -> dict:
+    """Open a URL or file with the default application."""
+    target = action.get("target", "").strip()
+    if not target:
+        raise ValueError("`target` is required for open (e.g. \"https://example.com\")")
+    if _SYSTEM == "Darwin":
+        r = subprocess.run(["open", target], capture_output=True, text=True, timeout=15)
+        if r.returncode != 0:
+            raise RuntimeError(f"open failed: {r.stderr.strip() or r.stdout.strip()}")
+    elif _SYSTEM == "Linux":
+        _ensure_display()
+        env = {**os.environ, "DISPLAY": os.environ.get("DISPLAY", ":0")}
+        r = subprocess.run(["xdg-open", target], capture_output=True, text=True,
+                           timeout=15, env=env)
+        if r.returncode not in (0, 2):
+            raise RuntimeError(f"xdg-open failed: {r.stderr.strip() or r.stdout.strip()}")
+    else:
+        import os as _os
+        _os.startfile(target)  # type: ignore[attr-defined]
+    return {"type": "text", "text": f"Opened: {target!r}"}
+
+
+def _launch(action: dict) -> dict:
+    """Spawn an application process and return its PID."""
+    app  = action.get("app", "").strip()
+    args = list(action.get("args") or [])
+    if not app:
+        raise ValueError("`app` is required for launch")
+    env = {**os.environ}
+    if _SYSTEM == "Linux":
+        _ensure_display()
+        env["DISPLAY"] = os.environ.get("DISPLAY", ":0")
+    proc = subprocess.Popen([app] + args,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                             env=env)
+    return {"type": "text", "text": f"Launched {app!r} (pid {proc.pid})"}
+
+
+def _focus_window(action: dict) -> dict:
+    """Bring a window to the foreground, matched by app name or title fragment."""
+    app_name = action.get("app",   "").strip()
+    title    = action.get("title", "").strip()
+    if not app_name and not title:
+        raise ValueError("focus_window requires at least one of `app` or `title`")
+
+    if _SYSTEM == "Darwin":
+        try:
+            from AppKit import NSWorkspace  # type: ignore[import]
+            _NSApplicationActivateIgnoringOtherApps = 1 << 1
+            ws = NSWorkspace.sharedWorkspace()
+            for a in ws.runningApplications():
+                name = str(a.localizedName() or "")
+                if app_name and app_name.lower() not in name.lower():
+                    continue
+                if title and title.lower() not in name.lower():
+                    continue
+                a.activateWithOptions_(_NSApplicationActivateIgnoringOtherApps)
+                return {"type": "text", "text": f"Focused: {name!r}"}
+            raise RuntimeError(f"No running app matched app={app_name!r} title={title!r}")
+        except ImportError as exc:
+            raise RuntimeError(
+                "focus_window on macOS requires pyobjc: pip install pyobjc-framework-AppKit"
+            ) from exc
+
+    elif _SYSTEM == "Linux":
+        _ensure_display()
+        query = app_name or title
+        ids   = _xdo("search", "--onlyvisible", "--name", query).strip().split()
+        if not ids:
+            raise RuntimeError(f"No visible window found matching {query!r}")
+        _xdo("windowactivate", "--sync", ids[0])
+        return {"type": "text", "text": f"Focused window matching {query!r} (id {ids[0]})"}
+
+    else:
+        raise RuntimeError(f"focus_window is not implemented for {_SYSTEM}")
+
+
+# ── Finding 1 (daemon) + Finding 4: delay support ────────────────────────────
+
 def execute(action: dict) -> dict:
+    """Dispatch action; apply optional per-action post-delay (Finding 1)."""
+    delay  = float(action.get("delay") or 0)
+    result = _execute_inner(action)
+    if delay > 0:
+        time.sleep(min(delay, 10.0))
+    return result
+
+
+def _execute_inner(action: dict) -> dict:
     t = action.get("type")
 
     # ── screenshot: always native (no backend needed) ─────────────────────────
@@ -1059,10 +1245,8 @@ def execute(action: dict) -> dict:
         time.sleep(duration)
         return {"type": "text", "text": f"Waited {duration}s"}
 
-    # ── shell: run a command ──────────────────────────────────────────────────
-    # (handled by executor.ts but keep a local path for direct testing)
+    # ── shell ─────────────────────────────────────────────────────────────────
     if t == "shell":
-        import os as _os
         cmd = action.get("command", "").strip()
         if not cmd:
             raise ValueError("`command` is required for shell actions")
@@ -1070,6 +1254,94 @@ def execute(action: dict) -> dict:
         return {"type": "text",
                 "text": "\n".join(filter(None, [r.stdout.strip(), r.stderr.strip()])) or "(no output)",
                 "exitCode": r.returncode}
+
+    # ── Finding 4: hotkey – convert keys list → combo, delegate to `key` ─────
+    if t == "hotkey":
+        keys = action.get("keys", [])
+        if not keys:
+            raise ValueError("`keys` is required for hotkey (e.g. [\"ctrl\", \"shift\", \"p\"])")
+        combo = "+".join(_norm_key(str(k)) for k in keys)
+        return _execute_inner({**action, "type": "key", "text": combo})
+
+    # ── Finding 4: OS-level open / launch / focus_window ─────────────────────
+    if t == "open":
+        return _open(action)
+    if t == "launch":
+        return _launch(action)
+    if t == "focus_window":
+        return _focus_window(action)
+
+    # ── Assertions — workflow checkpoint nodes ───────────────────────────────
+    # These run OCR then raise AssertionError so the service stops the workflow
+    # at the exact step that failed, with a human-readable message.
+
+    if t == "assert_text_visible":
+        target    = action.get("text", "").strip()
+        min_score = float(action.get("min_score", 0.7))
+        message   = action.get("message", "").strip()
+        if not target:
+            raise ValueError("`text` is required for assert_text_visible")
+        matches = _match_text(target, _ocr_screen())
+        best    = matches[0] if matches else None
+        score   = float(best["score"]) if best else 0.0
+        if score < min_score:
+            raise AssertionError(
+                message or
+                f"Assert failed: expected {target!r} to be visible "
+                f"(best match score {score:.2f} – threshold {min_score:.2f})"
+            )
+        return {
+            "type": "text",
+            "text": f"✓ Assert passed: {target!r} visible (score {score:.2f})",
+            "matched": best["text"] if best else "",
+            "score": score,
+            "x": best["cx"] if best else 0,
+            "y": best["cy"] if best else 0,
+        }
+
+    if t == "assert_text_not_visible":
+        target    = action.get("text", "").strip()
+        max_score = float(action.get("max_score", 0.7))
+        message   = action.get("message", "").strip()
+        if not target:
+            raise ValueError("`text` is required for assert_text_not_visible")
+        matches = _match_text(target, _ocr_screen())
+        best    = matches[0] if matches else None
+        score   = float(best["score"]) if best else 0.0
+        if score >= max_score:
+            raise AssertionError(
+                message or
+                f"Assert failed: {target!r} is visible but should NOT be "
+                f"(score {score:.2f} ≥ threshold {max_score:.2f})"
+            )
+        return {
+            "type": "text",
+            "text": f"✓ Assert passed: {target!r} not visible (best score {score:.2f})",
+            "score": score,
+        }
+
+    if t == "assert_result_contains":
+        # Cross-platform: checks that the previous step's text output contains a substring.
+        # The runner receives the expected string; the calling side must pass
+        # the previous result as `previous_result`.
+        expected        = action.get("expected", "").strip()
+        previous_result = str(action.get("previous_result", ""))
+        case_sensitive  = bool(action.get("case_sensitive", False))
+        message         = action.get("message", "").strip()
+        if not expected:
+            raise ValueError("`expected` is required for assert_result_contains")
+        haystack = previous_result if case_sensitive else previous_result.lower()
+        needle   = expected        if case_sensitive else expected.lower()
+        if needle not in haystack:
+            raise AssertionError(
+                message or
+                f"Assert failed: expected output to contain {expected!r}\n"
+                f"Actual output: {previous_result[:200]!r}"
+            )
+        return {
+            "type": "text",
+            "text": f"✓ Assert passed: output contains {expected!r}",
+        }
 
     # ── mouse / keyboard: delegate to selected backend ────────────────────────
     _ensure_display()
