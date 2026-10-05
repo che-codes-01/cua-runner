@@ -38,7 +38,8 @@ interface SessionState {
 
 const sessions = new Map<string, SessionState>();
 
-function getSession(sessionId: string): SessionState {
+function getSession(sessionId: string | undefined): SessionState {
+  sessionId = sessionId ?? 'default';
   if (!sessions.has(sessionId)) {
     sessions.set(sessionId, {
       queue:        Promise.resolve(),
@@ -179,9 +180,13 @@ async function handleMessage(msg: ServiceMsg): Promise<void> {
 
     // ── Service relays an action from the user ───────────────────────────────
     case 'action': {
-      const { actionId, sessionId, payload } = msg as {
-        type: string; actionId: string; sessionId: string; payload: unknown;
+      const { actionId, sessionId: rawSessionId, payload } = msg as {
+        type: string; actionId: string; sessionId?: string; payload: unknown;
       };
+      // sessionId may be absent when the service calls sendAction() (no-session
+      // workflow execution path). Fall back to a stable key so the tracer and
+      // getSession() never receive undefined.
+      const sessionId = rawSessionId ?? `anon-${actionId}`;
       const actionType = (payload as { type?: string })?.type ?? 'unknown';
       log.info(`Action queued  id: ${actionId}  session: ${sessionId}  type: ${actionType}`);
 
