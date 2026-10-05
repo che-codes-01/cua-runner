@@ -103,8 +103,8 @@ _KEY_NORM: dict[str, str] = {
     "right": "right","Right": "right",
     "home": "home","Home": "home",
     "end": "end",  "End": "end",
-    "pageup": "pageup",  "Prior": "pageup",
-    "pagedown": "pagedown","Next": "pagedown",
+    "pageup": "pageup",   "Prior": "pageup",   "page_up": "pageup",
+    "pagedown": "pagedown", "Next": "pagedown",  "page_down": "pagedown",
     # modifiers
     "ctrl": "ctrl",   "control": "ctrl", "Control": "ctrl",
     "Control_L": "ctrl", "Control_R": "ctrl",
@@ -511,8 +511,9 @@ def _quartz_key(combo: str) -> None:
         Quartz.CGEventSetFlags(down, flags)
         Quartz.CGEventSetFlags(up,   flags)
     Quartz.CGEventPost(Quartz.kCGSessionEventTap, down)
-    time.sleep(0.02)   # tiny gap so the target app registers the press
+    time.sleep(0.05)   # gap between down and up so the target app registers the press
     Quartz.CGEventPost(Quartz.kCGSessionEventTap, up)
+    time.sleep(0.08)   # settle: wait for the app to process the key before the next action
 
 
 # ── pyautogui keyboard helper (cliclick backend uses this for key/type) ──────
@@ -558,6 +559,7 @@ def _pyautogui_type(text: str) -> None:
     subprocess.run(["pbcopy"], input=text.encode("utf-8"), check=True)
     time.sleep(0.05)
     _quartz_key("cmd+v")
+    time.sleep(0.08)   # settle: ensure paste has committed before the next action fires
 
 
 def _backend_cliclick(t: str, action: dict) -> dict:
@@ -596,6 +598,9 @@ def _backend_cliclick(t: str, action: dict) -> dict:
     if t == "type":
         text = action.get("text", "")
         _pyautogui_type(text)   # pbcopy + cmd+v via pyautogui (no Automation needed)
+        delay = float(action.get("delay", 0))
+        if delay > 0:
+            time.sleep(delay)
         return {"type": "text", "text": f"Typed: {text!r}"}
 
     if t == "key":
@@ -604,6 +609,9 @@ def _backend_cliclick(t: str, action: dict) -> dict:
         # than cliclick for modifier key combinations and does not require a
         # separate accessibility grant beyond what the runner already holds.
         _quartz_key(raw)
+        delay = float(action.get("delay", 0))
+        if delay > 0:
+            time.sleep(delay)
         return {"type": "text", "text": f"Pressed key: {raw}"}
 
     if t == "scroll":
@@ -756,6 +764,9 @@ def _backend_xdotool(t: str, action: dict) -> dict:
         parts = _norm_combo(raw)
         combo = "+".join(_xdo_key(p) for p in parts)
         _xdo("key", "--clearmodifiers", combo)
+        delay = float(action.get("delay", 0))
+        if delay > 0:
+            time.sleep(delay)
         return {"type": "text", "text": f"Pressed key: {raw}"}
 
     if t == "scroll":
@@ -882,6 +893,9 @@ def _backend_pyautogui(t: str, action: dict) -> dict:
             _quartz_key("cmd+v")  # reliable Cmd+V via Quartz
         else:
             pyautogui.write(text, interval=0.02)
+        delay = float(action.get("delay", 0))
+        if delay > 0:
+            time.sleep(delay)
         return {"type": "text", "text": f"Typed: {text!r}"}
 
     if t == "key":
@@ -892,6 +906,9 @@ def _backend_pyautogui(t: str, action: dict) -> dict:
             pyautogui.press(keys[0])
         else:
             pyautogui.hotkey(*keys)
+        delay = float(action.get("delay", 0))
+        if delay > 0:
+            time.sleep(delay)
         return {"type": "text", "text": f"Pressed key: {raw}"}
 
     if t == "scroll":
