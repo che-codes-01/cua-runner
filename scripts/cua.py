@@ -103,8 +103,8 @@ _KEY_NORM: dict[str, str] = {
     "right": "right","Right": "right",
     "home": "home","Home": "home",
     "end": "end",  "End": "end",
-    "pageup": "pageup",   "Prior": "pageup",   "page_up": "pageup",
-    "pagedown": "pagedown", "Next": "pagedown",  "page_down": "pagedown",
+    "pageup": "pageup",  "Prior": "pageup",
+    "pagedown": "pagedown","Next": "pagedown",
     # modifiers
     "ctrl": "ctrl",   "control": "ctrl", "Control": "ctrl",
     "Control_L": "ctrl", "Control_R": "ctrl",
@@ -497,21 +497,6 @@ def _parse_combo(raw: str) -> tuple[int, int]:
     return flags, keycode
 
 
-# Unicode characters for keys that need them set explicitly on the CGEvent.
-# Apps built on Cocoa text input (Electron, WebKit, etc.) read the Unicode
-# string from the event rather than the keycode — without it, Return/Enter,
-# Escape, Tab, etc. are silently dropped or misinterpreted.
-_MAC_KEY_UNICODE: dict[int, str] = {
-    36: "\r",    # return / enter
-    76: "\r",    # numpad enter
-    48: "\t",    # tab
-    51: "\x7f",  # backspace (delete)
-    117: "\x7f", # forward delete
-    53: "\x1b",  # escape
-    49: " ",     # space
-}
-
-
 def _quartz_key(combo: str) -> None:
     """
     Send a key or key combo via Quartz CGEventPost (macOS only).
@@ -522,20 +507,12 @@ def _quartz_key(combo: str) -> None:
     flags, keycode = _parse_combo(combo)
     down = Quartz.CGEventCreateKeyboardEvent(None, keycode, True)
     up   = Quartz.CGEventCreateKeyboardEvent(None, keycode, False)
-    # Set Unicode character data so Cocoa/Electron text-input handlers
-    # recognise the key — without this, Return, Escape, Tab etc. are
-    # often silently dropped by web-view and Electron apps.
-    uni = _MAC_KEY_UNICODE.get(keycode)
-    if uni:
-        Quartz.CGEventKeyboardSetUnicodeString(down, len(uni), uni)
-        Quartz.CGEventKeyboardSetUnicodeString(up,   len(uni), uni)
     if flags:
         Quartz.CGEventSetFlags(down, flags)
         Quartz.CGEventSetFlags(up,   flags)
-    Quartz.CGEventPost(Quartz.kCGHIDEventTap, down)
-    time.sleep(0.05)   # gap between down and up so the target app registers the press
-    Quartz.CGEventPost(Quartz.kCGHIDEventTap, up)
-    time.sleep(0.08)   # settle: wait for the app to process the key before the next action
+    Quartz.CGEventPost(Quartz.kCGSessionEventTap, down)
+    time.sleep(0.02)   # tiny gap so the target app registers the press
+    Quartz.CGEventPost(Quartz.kCGSessionEventTap, up)
 
 
 # ── pyautogui keyboard helper (cliclick backend uses this for key/type) ──────
@@ -581,7 +558,6 @@ def _pyautogui_type(text: str) -> None:
     subprocess.run(["pbcopy"], input=text.encode("utf-8"), check=True)
     time.sleep(0.05)
     _quartz_key("cmd+v")
-    time.sleep(0.08)   # settle: ensure paste has committed before the next action fires
 
 
 def _backend_cliclick(t: str, action: dict) -> dict:
@@ -620,9 +596,6 @@ def _backend_cliclick(t: str, action: dict) -> dict:
     if t == "type":
         text = action.get("text", "")
         _pyautogui_type(text)   # pbcopy + cmd+v via pyautogui (no Automation needed)
-        delay = float(action.get("delay", 0))
-        if delay > 0:
-            time.sleep(delay)
         return {"type": "text", "text": f"Typed: {text!r}"}
 
     if t == "key":
@@ -631,9 +604,6 @@ def _backend_cliclick(t: str, action: dict) -> dict:
         # than cliclick for modifier key combinations and does not require a
         # separate accessibility grant beyond what the runner already holds.
         _quartz_key(raw)
-        delay = float(action.get("delay", 0))
-        if delay > 0:
-            time.sleep(delay)
         return {"type": "text", "text": f"Pressed key: {raw}"}
 
     if t == "scroll":
@@ -786,9 +756,6 @@ def _backend_xdotool(t: str, action: dict) -> dict:
         parts = _norm_combo(raw)
         combo = "+".join(_xdo_key(p) for p in parts)
         _xdo("key", "--clearmodifiers", combo)
-        delay = float(action.get("delay", 0))
-        if delay > 0:
-            time.sleep(delay)
         return {"type": "text", "text": f"Pressed key: {raw}"}
 
     if t == "scroll":
@@ -915,9 +882,6 @@ def _backend_pyautogui(t: str, action: dict) -> dict:
             _quartz_key("cmd+v")  # reliable Cmd+V via Quartz
         else:
             pyautogui.write(text, interval=0.02)
-        delay = float(action.get("delay", 0))
-        if delay > 0:
-            time.sleep(delay)
         return {"type": "text", "text": f"Typed: {text!r}"}
 
     if t == "key":
@@ -928,9 +892,6 @@ def _backend_pyautogui(t: str, action: dict) -> dict:
             pyautogui.press(keys[0])
         else:
             pyautogui.hotkey(*keys)
-        delay = float(action.get("delay", 0))
-        if delay > 0:
-            time.sleep(delay)
         return {"type": "text", "text": f"Pressed key: {raw}"}
 
     if t == "scroll":
